@@ -72,11 +72,16 @@ class DataSet():
         for index, line in enumerate(header):
             group, region, aq_date, *argv, scan = line
             if group:
-                current_group = Group(group)
-                self.groups.append(current_group)
+                # Check if group exists in dataset, if so, add region to group.
+                loaded_groups = [group.name for group in self.groups]
+                if group in loaded_groups:
+                    current_group = self.groups[loaded_groups.index(group)]
+                else:
+                    current_group = Group(group)
+                    self.groups.append(current_group)
             elif region:
                 current_region = Region(region)
-                current_group.add_member(current_region)
+                current_group.add_region(current_region)
                 current_region.header['Region']=region
                 ii = index+1
                 group, region, *argv = header[ii]
@@ -113,11 +118,11 @@ class DataSet():
     def __str__(self):
         
         return_str = ''
-        for group in self.groups:
+        for index, group in enumerate(self.groups):
            
-            return_str+=group.name+'\n'
-            for region in group.member:
-                return_str+='->'+region.header['Region']+'\n'
+            return_str+=str(index)+': '+group.name+'\n'
+            for region_index, region in enumerate(group.regions):
+                return_str+='->'+str(region_index)+': '+region.header['Region']+'\n'
         return return_str
 
     
@@ -127,16 +132,16 @@ class Group():
     """
     def __init__(self, name):
         self.name = name
-        self.member = []
-    def add_member(self, member):
-        self.member.append(member)
+        self.regions = []
+    def add_region(self, region):
+        self.regions.append(region)
 
-class Region(Group):
+class Region():
     """
     The regions as defined by SPECS Prodigy. This data can be multidimensional.
     """
     def __init__(self, name):
-        super().__init__(name)
+        self.name = name
         self.header={}
         self.x = np.array([])
         self.time = []
@@ -186,5 +191,5 @@ class Region(Group):
 
 
 if __name__ == '__main__':
-    data = DataSet(['data.xy'])
+    data = DataSet(['../examples/data.xy'])
 

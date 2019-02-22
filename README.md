@@ -12,6 +12,6 @@ Instalation instruction:
 clone this repositry.
 
 enter the following commands:
-cd PATH_TO_REPO/species-xps
+cd PATH_TO_REPO/
 python setup.py build
-pytohn setup.py install
+python setup.py install
