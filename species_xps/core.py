@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime, timedelta
 
 
+
 class DataSet():
     def __init__(self, files):
         self.files = files
@@ -12,7 +13,7 @@ class DataSet():
                 self.load_data(file)
         else:
             self.load_data(files)
-        
+
     def load_data(self, files):
         keys_dict = {0 : 'Acquisition Date',
                          1: 'Cycle',
@@ -35,7 +36,7 @@ class DataSet():
                          18: 'OrdinateRange',
                          19: 'Number of Scans',
                          20: 'Scan'}
-            
+
         with open(files, 'r') as f:
             file = f.read()
         data_pat = re.compile(r'(?<=#\n)[\d\.\s]+(?=\n|(?:\s*\Z))', re.DOTALL)
@@ -65,10 +66,10 @@ class DataSet():
                          .*Scan:\s+(\d+)\n
                          """,re.X)
         header = pat.findall(file)
-        
+
         shifter = 0
 
-        
+
         for index, line in enumerate(header):
             group, region, aq_date, *argv, scan = line
             if group:
@@ -87,9 +88,9 @@ class DataSet():
                 group, region, *argv = header[ii]
                 while len(region)==0 and ii<len(header):
                     group, region, *argv = header[ii]
-                    info = [i for i, e in enumerate(argv) if len(e) != 0]     
+                    info = [i for i, e in enumerate(argv) if len(e) != 0]
                     try:
-                        
+
                         label = keys_dict[info[0]]
                         if label in current_region.header.keys() and label != 'Scan':
                         # Aquisition date already in header, time to get the spectrum.
@@ -101,31 +102,31 @@ class DataSet():
                                 x, y = line.split()
                                 spectrum[0].append(float(x))
                                 spectrum[1].append(float(y))
-                            
+
                             spectrum = np.array(spectrum)
                             current_region.add_sweep(spectrum)
-                            shifter += 1                        
+                            shifter += 1
                         else:
                             current_region.header[label]=argv[info[0]]
-                        
+
                     except IndexError:
                         break
                     ii+=1
-                    
+
             else:
                 pass
-            
+
     def __str__(self):
-        
+
         return_str = ''
         for index, group in enumerate(self.groups):
-           
+
             return_str+=str(index)+': '+group.name+'\n'
             for region_index, region in enumerate(group.regions):
                 return_str+='->'+str(region_index)+': '+region.header['Region']+'\n'
         return return_str
 
-    
+
 class Group():
     """
     The group class which is a list of regions
@@ -146,10 +147,10 @@ class Region():
         self.x = np.array([])
         self.time = []
         self.data = np.array([])
-        
-        
+
+
     def add_sweep(self, data):
-        
+
         if len(self.x)==0:
             self.x = data[0]
             self.data = data[1]
@@ -179,17 +180,59 @@ class Region():
         self.offset = np.array(self.offset)
         # UTC = datetime.strptime(date, "%a %b %d %H:%M:%S %Y")
 
-         
+
 
     def __str__(self):
-        
+
         return_str = ''
         for key in self.header.keys():
             return_str += key+':\t'+self.header[key]+'\n'
-            
+
         return return_str
+
+
+class TangoData(object):
+    """
+    Loads tango data, as obtained from the beamlines, into memory.
+    The shape of the data depends on the shape of the files.
+    """
+    def __init__(self, filename):
+        self.name=""
+        self.time = []
+        self.data = []
+        self.load(filename)
+
+    def load(self,filename):
+        with open(filename, 'r') as f:
+            buffer = f.read()
+        buffer = buffer.split('\n')
+        for line in buffer:
+            if '#' in line and not self.name:
+                # get name
+                junk, line = line.split('//')
+                address, section,type,device,feature = ''.join(line).split('/')
+                self.name = section+'/'+device+'/'+feature
+            elif '#' in line:
+                #Skip the second line for now
+                pass
+
+            elif len(line) > 0:
+                #parse the data
+                time, *data = line.split('\t')
+
+                try:
+                    self.time.append(datetime.strptime(time, "%Y-%m-%d_%H:%M:%S.%f"))
+                except ValueError:
+                    self.time.append(datetime.strptime(time, "%Y-%m-%d_%H:%M:%S"))
+                if len(data) == 1:
+                    self.data.append(float(data[0]))
+                else:
+                    self.data.append(float(data))
+
+            else:
+                pass
+
 
 
 if __name__ == '__main__':
     data = DataSet(['../examples/data.xy'])
-
