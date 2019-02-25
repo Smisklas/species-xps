@@ -197,7 +197,9 @@ class TangoData(object):
     The shape of the data depends on the shape of the files.
     """
     def __init__(self, filename):
-        self.name=""
+        self.section=""
+        self.device=''
+        self.attribute=''
         self.time = []
         self.data = []
         self.load(filename)
@@ -207,11 +209,13 @@ class TangoData(object):
             buffer = f.read()
         buffer = buffer.split('\n')
         for line in buffer:
-            if '#' in line and not self.name:
+            if '#' in line and not self.section:
                 # get name
                 junk, line = line.split('//')
-                address, section,type,device,feature = ''.join(line).split('/')
-                self.name = section+'/'+device+'/'+feature
+                address, section,type,device,attribute = ''.join(line).split('/')
+                self.section = section
+                self.device = device
+                self.attribute = attribute
             elif '#' in line:
                 #Skip the second line for now
                 pass
@@ -219,9 +223,10 @@ class TangoData(object):
             elif len(line) > 0:
                 #parse the data
                 time, *data = line.split('\t')
+                timeformat = "%Y-%m-%d_%H:%M:%S.%f"
 
                 try:
-                    self.time.append(datetime.strptime(time, "%Y-%m-%d_%H:%M:%S.%f"))
+                    self.time.append(datetime.strptime(time, timeformat))
                 except ValueError:
                     self.time.append(datetime.strptime(time, "%Y-%m-%d_%H:%M:%S"))
                 if len(data) == 1:
@@ -231,6 +236,7 @@ class TangoData(object):
 
             else:
                 pass
+        self.data = np.array(self.data)
 
 
 
