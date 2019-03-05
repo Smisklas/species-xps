@@ -238,7 +238,77 @@ class TangoData(object):
                 pass
         self.data = np.array(self.data)
 
+class Align():
+    """
+    This is a class that aligns and normalises its constituents along a chosen energy region (default e_center+/-1 eV)
+    """
+    def __init__(self, datalist, e_center, minmax= (1,-1)):
+        self.datalist = datalist
+        self.e_center = e_center
+        self.minmax = minmax
+        self.stats = []
+    def align(self):
 
+        for data in datalist:
+            maximum = max(data.data[(data.x > self.e_center + self.minmax[1]) & (data.x < self.e_center + self.minmax[0])])
+            center = self.fit_gaussian(data, maximum)
+            self.stats.append((center, maximum))
+
+    def fit_gaussian(self, data, maximum):
+
+        gauss = GaussianModel()
+        pars = gauss.make_params(center = self.e_center, amplitude = maximum, sigma = 1)
+        out = gauss.fit(data.data[(data.x > self.e_center +self.minmax[1]) & (data.x < self.e_center + self.minmax[0])]
+                        , pars, x=data.x[(data.x > self.e_center +self.minmax[1]) & (data.x < self.e_center + self.minmax[0])])
+        return out.params['center'].value
+
+    def plot(self):
+        if not self.stats:
+            print('Not aligned, stopping...')
+            return
+        for stat, data in zip(self.stats, self.datalist):
+            e_loc, maximum = stat
+            plt.plot(data.x+(self.stats[0][0]-e_loc), data.data/maximum, label = data.name)
+
+        plt.legend()
+
+class ExportedIgorData(object):
+    """
+    test class for the exported igor data. To be included in the species-xps routine.
+    """
+    def __init__(self, filename):
+        self.name=filename.replace('exported/','').replace('.txt','')
+        self.x = np.array([])
+        self.data = np.array([])
+        self.background = []
+        self.data_wb = []
+        self.weight=[]
+        self.load(filename)
+    def load(self, filename):
+        data = np.genfromtxt(filename, delimiter=',',skip_header=1)
+        data = np.transpose(data)
+        self.x = data[0]
+        self.data = data[1:]
+    def collapse(self):
+        self.data = np.sum(self.data, axis=0)
+
+    def baseline(self, limits):
+
+        self.weight = np.array(self.x)
+        self.weight[:] = 0
+        if type(limits) == list:
+            for (high, low) in limits:
+                self.weight[(self.x < high) & (self.x > low)] = 1
+        else:
+            high, low = limits
+            self.weight[(self.x < high) & (self.x > low)] = 1
+
+        fit = np.polyfit(self.x, self.data, 4, w=self.weight)
+        self.background = np.poly1d(fit)
+        self.data_wb = self.data-self.background(self.x)
+
+    def calibate(self, shift):
+        self.x_cal = self.x+shift
 
 if __name__ == '__main__':
     data = DataSet(['../examples/data.xy'])
