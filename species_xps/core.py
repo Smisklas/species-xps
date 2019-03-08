@@ -1,6 +1,7 @@
 import re
 import numpy as np
 from datetime import datetime, timedelta
+from lmfit.models import GaussianModel
 
 
 
@@ -248,14 +249,14 @@ class Align():
         self.minmax = minmax
         self.stats = []
     def align(self):
-
+        #Aligns and normalises the data to the specified region
         for data in datalist:
             maximum = max(data.data[(data.x > self.e_center + self.minmax[1]) & (data.x < self.e_center + self.minmax[0])])
             center = self.fit_gaussian(data, maximum)
             self.stats.append((center, maximum))
 
     def fit_gaussian(self, data, maximum):
-
+        #Fits a gaussian model to a subset of the data to be aligned
         gauss = GaussianModel()
         pars = gauss.make_params(center = self.e_center, amplitude = maximum, sigma = 1)
         out = gauss.fit(data.data[(data.x > self.e_center +self.minmax[1]) & (data.x < self.e_center + self.minmax[0])]
@@ -276,39 +277,84 @@ class ExportedIgorData(object):
     """
     test class for the exported igor data. To be included in the species-xps routine.
     """
-    def __init__(self, filename):
-        self.name=filename.replace('exported/','').replace('.txt','')
+    def __init__(self, filename, headerfile=None):
+        self.file=filename.replace('exported/','').replace('.txt','')
         self.x = np.array([])
         self.data = np.array([])
         self.background = []
         self.data_wb = []
         self.weight=[]
+        self.fit = None
+        self.x_cal = None
+        self.header = dict()
         self.load(filename)
+        if headerfile:
+            self.read_header(headerfile)
+
+
     def load(self, filename):
         data = np.genfromtxt(filename, delimiter=',',skip_header=1)
         data = np.transpose(data)
         self.x = data[0]
         self.data = data[1:]
+
+
     def collapse(self):
         self.data = np.sum(self.data, axis=0)
 
-    def baseline(self, limits):
 
+    def baseline(self, limits):
+        #Removes a polynomial background from the data
         self.weight = np.array(self.x)
-        self.weight[:] = 0
+        self.weight[:] = 1
         if type(limits) == list:
-            for (high, low) in limits:
-                self.weight[(self.x < high) & (self.x > low)] = 1
+            for region in limits:
+                self.weight[(self.x < max(region)) & (self.x > min(region))] = 0
         else:
             high, low = limits
-            self.weight[(self.x < high) & (self.x > low)] = 1
+            self.weight[(self.x < max(limits)) & (self.x > min(limits))] = 0
 
         fit = np.polyfit(self.x, self.data, 4, w=self.weight)
         self.background = np.poly1d(fit)
         self.data_wb = self.data-self.background(self.x)
 
+
     def calibate(self, shift):
+        # shifts the x scale according to shift
         self.x_cal = self.x+shift
+
+
+    def fit(mod, pars):
+        # Fits a lmfit model to the data contained.
+        if self.data_wb and self.x_cal:
+            self.fit = mod.fit(self.data_wb, pars, x=self.x_cal)
+        elif slef.data_wb and not self.x_cal:
+            self.fit = mod.fit(self.data_wb, pars, x=self.x)
+        elif self.x_cal and not self.data_wb:
+            self.fit = mod.fit(self.data, pars, x=self.x_cal)
+        else:
+            self.fit = mod.fit(self.data, pars, x=self.x)
+
+
+    def read_header(self, headerfile):
+        # Loads the header as exported from Igor Pro
+        with open(headerfile,'r') as f:
+            try:
+                header = f.read()
+            except:
+                print('Unreadable file....')
+                return
+        header = header.replace(r'\\','/').split(r'\r')
+        for index, line in enumerate(header):
+            if index < 2:
+                pass
+            else:
+                try:
+                    label, info = line.split('=')
+                    self.header[label]=info
+                except:
+                    pass
+
 
 if __name__ == '__main__':
     data = DataSet(['../examples/data.xy'])
