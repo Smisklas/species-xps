@@ -3,6 +3,50 @@ import numpy as np
 from datetime import datetime, timedelta
 from lmfit.models import GaussianModel
 
+class TemperatureLog():
+    def __init__(self, file):
+        self.files = self.clean_filename(file)
+        self.temps = []
+        self.time = []
+        self.load_data(file)
+
+    def clean_filename(self, filename):
+        if "/" in filename:
+            #it is a partial parth
+            file = filename.split('/')[-1]
+        else:
+            file = filename
+
+        return file
+
+    def load_data(self, file):
+        #Loads a SPECIES temperature log and parses the data
+        with open(file,'r') as f:
+            data = f.read()
+        data = data.strip('\n').split('\n')
+        self.time = [line.split('\t')[0] for line in data]
+        self.temps = np.array([float(line.split('\t')[1]) for line in data])
+
+
+        #Parse the times into datetime
+        format_string = '%H:%M:%S'
+        date_string = self.files.split('_')[-1].replace('.txt',"")
+        date = datetime.strptime(date_string, '%m-%d-%Y')
+        self.time = [date + (datetime.strptime(time, format_string)-date) for time in self.time if len(time)>0]
+
+    def match_to_data(self, to_match):
+        """
+        This function matches the timestamps of the temperatures and returns them.
+        """
+        point_to_get = []
+        for point in to_match:
+            shifter=[]
+            for item in self.time:
+                shifter.append((point - item).seconds)
+            array = np.asarray(shifter)
+            point_to_get.append(self.temps[np.abs(array).argmin()])
+        return point_to_get
+
 
 
 class DataSet():
@@ -182,6 +226,18 @@ class Region():
         # UTC = datetime.strptime(date, "%a %b %d %H:%M:%S %Y")
 
 
+    def generate_time_axis(self):
+        """
+        Generates an axis of datetime objects from the timestamps of
+        multidimensional data.
+        """
+        format_string = '%m/%d/%y %H:%M:%S'
+        tmp_time = []
+        for timestamp in self.time:
+            date, time, utc = timestamp.split()
+            tmp_time.append(datetime.strptime(' '.join([date,time]), format_string))
+
+        self.time = tmp_time
 
     def __str__(self):
 
@@ -250,7 +306,7 @@ class Align():
         self.stats = []
     def align(self):
         #Aligns and normalises the data to the specified region
-        for data in datalist:
+        for data in self.datalist:
             maximum = max(data.data[(data.x > self.e_center + self.minmax[1]) & (data.x < self.e_center + self.minmax[0])])
             center = self.fit_gaussian(data, maximum)
             self.stats.append((center, maximum))
@@ -324,11 +380,11 @@ class ExportedIgorData(object):
         self.x_cal = self.x+shift
 
 
-    def fit(mod, pars):
+    def fit_mod(self, mod, pars):
         # Fits a lmfit model to the data contained.
         if self.data_wb and self.x_cal:
             self.fit = mod.fit(self.data_wb, pars, x=self.x_cal)
-        elif slef.data_wb and not self.x_cal:
+        elif self.data_wb and not self.x_cal:
             self.fit = mod.fit(self.data_wb, pars, x=self.x)
         elif self.x_cal and not self.data_wb:
             self.fit = mod.fit(self.data, pars, x=self.x_cal)
