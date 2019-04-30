@@ -3,6 +3,50 @@ import numpy as np
 from datetime import datetime, timedelta
 from lmfit.models import GaussianModel
 
+class QMSSet():
+    # class that holds the qms data from the species beamline
+
+    def __init__(self, filename):
+        self.header, self.date, self.offset, self.data = self.qms_loader(filename)
+
+    def qms_loader(self, filename, skip=2):
+
+        date_list = []
+        time_list = []
+        offset_list = []
+        data_list = []
+        header = []
+        counter  = 0
+        with open(filename) as f:
+            for line in f:
+                if counter == 0:
+                    header = line.strip('\n').split(';')
+                counter += 1
+                if counter > skip:
+                    date, time, offset, *data = line.split(';')
+                    date_list.append(date.strip())
+                    time_list.append(time.strip())
+                    offset_list.append(float(offset.replace(',','.')))
+                    for index in range(len(data)):
+                        if counter == skip+1:
+                            data_list.append([float(data[index].replace(',','.').strip('\n'))])
+                        else:
+                            data_list[index].append(float(data[index].replace(',','.').strip('\n')))
+
+
+
+        date_times = [datetime.strptime(' '.join([date_list[j], time_list[j]]),
+                                    '%Y-%m-%d %H:%M:%S.%f') for j in range(len(date_list))]
+
+        qms_data = []
+        qms_data.append(header)
+        qms_data.append(date_times)
+        qms_data.append(offset_list)
+        qms_data.append(data_list)
+
+        return qms_data
+
+
 class TemperatureLog():
     def __init__(self, file):
         self.files = self.clean_filename(file)
